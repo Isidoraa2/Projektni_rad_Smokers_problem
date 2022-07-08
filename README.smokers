@@ -1,0 +1,205 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <time.h>
+
+void *pushA(void* arg);
+void *pushB(void* arg);
+void *pushC(void* arg);
+void *funcA(void* arg);
+void *funcB(void* arg);
+void *funcC(void* arg);
+void *funcTobacco(void* arg);
+void *funcPaper(void* arg);
+void *funcMatch(void* arg);
+
+sem_t agentSem;
+sem_t tobacco;
+sem_t paper;
+sem_t match;
+sem_t tobaccoSem;
+sem_t paperSem;
+sem_t matchSem;
+sem_t mutex;
+
+int isPaper = 0;
+int isMatch = 0;
+int isTobacco = 0;
+
+int main(int argc, char *argv[])
+{
+	sem_init(&mutex, 0, 1);
+	sem_init(&agentSem, 0, 1);
+	sem_init(&tobacco, 0, 0);
+	sem_init(&paper, 0, 0);
+	sem_init(&match, 0, 0);
+	sem_init(&tobaccoSem, 0, 0);
+	sem_init(&matchSem, 0, 0);
+	sem_init(&paperSem, 0, 0);
+	
+	pthread_t agentA, agentB, agentC, pusherA, pusherB, pusherC;
+	pthread_t smokerTobacco, smokerPaper, smokerMatch;
+
+	int i = 0;
+	int n;
+	printf("Koliko pusaca ce da napravi cigaru? \n");
+	scanf("%d", &n);
+	int niz[10];
+
+	while (i < n){
+	niz[i] = i;
+	i++;
+	}
+	
+	srand((unsigned) time(NULL));
+	i = 0;
+	while (i < n){
+		int br = rand();
+		if (br % 3 == 0){
+		if(!pthread_create(&agentA,NULL,funcA,NULL)){
+			pthread_create(&pusherA,NULL,pushA,NULL);
+			pthread_create(&pusherB,NULL,pushB,NULL);
+			pthread_create(&smokerMatch,NULL,funcMatch,(void*) &niz[i]);
+
+			pthread_join(agentA,NULL);
+			pthread_join(pusherA,NULL);
+			pthread_join(pusherB,NULL);
+			pthread_join(smokerMatch,NULL);
+			}
+		else {
+			printf("Kreiranje niti agenta A kod pusaca %d je neuspesno.", i + 1);
+		}
+		}
+
+		else if (br % 3 == 1){
+		if(!pthread_create(&agentB,NULL,funcB,NULL)){
+			pthread_create(&pusherB,NULL,pushB,NULL);
+			pthread_create(&pusherC,NULL,pushC,NULL);
+			pthread_create(&smokerTobacco,NULL,funcTobacco,(void*) &niz[i]);
+
+			pthread_join(agentB,NULL);
+			pthread_join(pusherB,NULL);
+			pthread_join(pusherC,NULL);
+			pthread_join(smokerTobacco,NULL);
+			}
+		else {
+			printf("Kreiranje niti agenta B kod pusaca %d je neuspesno.", i + 1);
+		}
+		}
+
+		else {
+		if(!pthread_create(&agentC,NULL,funcC,NULL)){
+			pthread_create(&pusherA,NULL,pushA,NULL);
+			pthread_create(&pusherC,NULL,pushC,NULL);
+			pthread_create(&smokerPaper,NULL,funcPaper,(void*) &niz[i]);
+
+			pthread_join(agentC,NULL);
+			pthread_join(agentA,NULL);
+			pthread_join(pusherC,NULL);
+			pthread_join(smokerPaper,NULL);
+			}
+		else {
+			printf("Kreiranje niti agenta C kod pusaca %d je neuspesno.", i + 1);
+		}
+		}
+	i++;
+	}
+}
+
+void *funcA(void* arg){
+	
+	sem_wait(&agentSem);
+	sem_post(&tobacco);
+	sem_post(&paper);
+}
+
+void *funcB(void* arg){
+	
+	sem_wait(&agentSem);
+	sem_post(&match);
+	sem_post(&paper);
+}
+
+void *funcC(void* arg){
+	
+	sem_wait(&agentSem);
+	sem_post(&tobacco);
+	sem_post(&match);
+}
+
+void *pushA(void* arg){
+
+	sem_wait(&tobacco);
+	sem_wait(&mutex);
+	if (isPaper){
+		isPaper = 0;
+		sem_post(&matchSem);
+	}
+	else if (isMatch){
+		isMatch = 0;
+		sem_post(&paperSem);
+	}
+	else isTobacco = 1;
+	sem_post(&mutex);
+}
+
+void *pushB(void* arg){
+
+	sem_wait(&paper);
+	sem_wait(&mutex);
+	if (isTobacco){
+		isTobacco = 0;
+		sem_post(&matchSem);
+	}
+	else if (isMatch){
+		isMatch = 0;
+		sem_post(&tobaccoSem);
+	}
+	else isPaper = 1;
+	sem_post(&mutex);
+}
+
+void *pushC(void* arg){
+
+	sem_wait(&match);
+	sem_wait(&mutex);
+	if (isPaper){
+		isPaper = 0;
+		sem_post(&tobaccoSem);
+	}
+	else if (isTobacco){
+		isTobacco = 0;
+		sem_post(&paperSem);
+	}
+	else isMatch = 1;
+	sem_post(&mutex);
+}
+
+void *funcTobacco(void *number){
+	
+	int i = *(int *) number;
+	sem_wait(&tobaccoSem);
+	printf("Pusac broj %d sa duvanom je uzeo upaljac i rizlu pa je napravio cigaru.\n", i + 1);
+	sem_post(&agentSem);
+	printf("Popusio je cigaru.\n");
+}
+
+void *funcPaper(void *number){
+
+	int i = *(int *) number;
+	sem_wait(&paperSem);
+	printf("Pusac broj %d sa rizlom je uzeo upaljac i duvan pa je napravio cigaru.\n", i + 1);
+	sem_post(&agentSem);
+	printf("Popusio je cigaru.\n");
+}
+
+void *funcMatch(void *number){
+
+	int i = *(int *) number;
+	sem_wait(&matchSem);
+	printf("Pusac broj %d sa upaljacem je uzeo duvan i rizlu pa je napravio cigaru.\n", i + 1);
+	sem_post(&agentSem);
+	printf("Popusio je cigaru.\n");
+}
